@@ -1,0 +1,363 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
+const GEMINI_API_KEY = "AIzaSyCBPOo9od0S5dRXzcQ5wsYu_m95Obx6hp0"; // Replace with your actual Gemini API key
+
+const SYSTEM_PROMPT = `
+SYSTEM INSTRUCTIONS:
+You are a professional Nepal tourism content generator. Your responses must be accurate, well-researched, and formatted as clean JSON without any conversational elements.
+
+STRICT CONTENT RESTRICTIONS:
+- ONLY respond to queries about Nepal tourism (places, attractions, travel information, cultural sites, activities)
+- For any non-Nepal tourism topics, respond with: {"error": "This service only provides information about Nepal tourism destinations and travel"}
+- Do not include emojis, casual language, or conversational phrases
+- Do not start responses with phrases like "Here's your guide" or "I hope this helps"
+
+RESPONSE FORMAT REQUIREMENTS:
+- All responses must be valid JSON format
+- Use professional, informative tone
+- Include accurate, current information
+- Verify all details before including them
+- Structure content with clear sections
+
+JSON STRUCTURE TEMPLATE:
+{
+  "destination": "destination_name",
+  "personalized_greeting": "Welcome [USER_NAME], tailored introduction based on user background and interests",
+  "overview": "brief_description",
+  "location": {
+    "distance_from_kathmandu": "distance_info",
+    "transportation": ["transport_options"]
+  },
+  "entry_information": {
+    "foreign_national_fee": "fee_in_npr_and_usd",
+    "access_restrictions": "any_restrictions",
+    "visiting_hours": "operating_hours"
+  },
+  "key_experiences": [
+    {
+      "activity": "activity_name",
+      "timing": "best_time_to_visit",
+      "description": "detailed_description"
+    }
+  ],
+  "cultural_significance": "cultural_and_historical_context",
+  "visitor_guidelines": [
+    "guideline_1",
+    "guideline_2",
+    "guideline_3"
+  ],
+  "estimated_budget_cad": {
+    "entry_fee": "amount",
+    "transportation": "amount_range",
+    "guide_optional": "amount_range",
+    "total_estimate": "total_range"
+  },
+  "best_visiting_time": "recommended_time_period",
+  "special_notes": "additional_important_information",
+  "interest_alignment": {
+    "applicable": true/false,
+    "matching_activities": ["activity_1", "activity_2"] or null,
+    "why_it_matches": "explanation_of_connection" or null,
+    "personalized_recommendation": "tailored advice based on user's specific background and interests" or null
+  },
+  "personal_connection": "explanation of why this destination will resonate with the user's background, interests, or travel style"
+}
+
+PERSONALIZATION REQUIREMENTS:
+- Address user by name in personalized_greeting
+- Reference user's country of origin, interests, and background where relevant
+- Tailor recommendations based on user's specific profile
+- Make connections between user's interests and destination features
+- Use inclusive language that makes the user feel the content was created specifically for them
+- Include practical advice relevant to user's background (currency conversions to their home country, cultural context for their nationality)
+
+INTEREST-BASED CONTENT RULES:
+- Only include "interest_alignment" section if the destination genuinely offers activities/experiences that match the specified visitor interests
+- Set "applicable": false if no meaningful connection exists
+- Be honest about limitations - not every place suits every interest
+- Examples of interest categories: adventure sports, spiritual experiences, cultural immersion, nature photography, trekking, wildlife, historical exploration, local cuisine, traditional crafts
+- Only claim interest alignment if specific, verifiable activities exist at the destination
+- Include personalized_recommendation only when interest alignment is applicable
+
+VERIFICATION REQUIREMENTS:
+- Verify all prices, timings, and access information
+- Confirm transportation options are current
+- Validate cultural and historical information
+- Check entry fees and restrictions
+- Ensure budget estimates reflect current rates
+`;
+
+const API_URL = 'http://localhost:3000';
+
+function GuideDisplay({ data }) {
+  if (!data) return null;
+  let parsed;
+  let raw = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      // Try to extract JSON block
+      const firstBrace = data.indexOf('{');
+      const lastBrace = data.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonBlock = data.substring(firstBrace, lastBrace + 1);
+        try {
+          parsed = JSON.parse(jsonBlock);
+        } catch {
+          // Still invalid
+        }
+      }
+    }
+  } else {
+    parsed = data;
+  }
+  if (!parsed) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow-md mt-6">
+        <div className="text-red-600 font-semibold mb-2">Invalid JSON response</div>
+        <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">{raw}</pre>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-md mt-6">
+      <h3 className="text-2xl font-bold text-blue-700 mb-2">{parsed.destination}</h3>
+      <p className="italic text-lg mb-4">{parsed.personalized_greeting}</p>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Overview</h4>
+        <p>{parsed.overview}</p>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Location</h4>
+        <p><b>Distance from Kathmandu:</b> {parsed.location?.distance_from_kathmandu}</p>
+        <p><b>Transportation:</b> {parsed.location?.transportation?.join(', ')}</p>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Entry Information</h4>
+        <ul className="list-disc ml-6">
+          <li><b>Foreign National Fee:</b> {parsed.entry_information?.foreign_national_fee}</li>
+          <li><b>Access Restrictions:</b> {parsed.entry_information?.access_restrictions}</li>
+          <li><b>Visiting Hours:</b> {parsed.entry_information?.visiting_hours}</li>
+        </ul>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Key Experiences</h4>
+        <ul className="list-disc ml-6">
+          {parsed.key_experiences?.map((exp, i) => (
+            <li key={i} className="mb-2">
+              <b>{exp.activity}</b> <span className="text-sm text-gray-500">({exp.timing})</span>
+              <div>{exp.description}</div>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Cultural Significance</h4>
+        <p>{parsed.cultural_significance}</p>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Visitor Guidelines</h4>
+        <ul className="list-disc ml-6">
+          {parsed.visitor_guidelines?.map((g, i) => <li key={i}>{g}</li>)}
+        </ul>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Estimated Budget (CAD)</h4>
+        <ul className="list-disc ml-6">
+          <li><b>Entry Fee:</b> {parsed.estimated_budget_cad?.entry_fee}</li>
+          <li><b>Transportation:</b> {parsed.estimated_budget_cad?.transportation}</li>
+          <li><b>Guide (Optional):</b> {parsed.estimated_budget_cad?.guide_optional}</li>
+          <li><b>Total Estimate:</b> {parsed.estimated_budget_cad?.total_estimate}</li>
+        </ul>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Best Visiting Time</h4>
+        <p>{parsed.best_visiting_time}</p>
+      </section>
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Special Notes</h4>
+        <p>{parsed.special_notes}</p>
+      </section>
+      {parsed.interest_alignment && (
+        <section className="mb-4">
+          <h4 className="font-semibold text-gray-800">Interest Alignment</h4>
+          <ul className="list-disc ml-6">
+            <li><b>Applicable:</b> {parsed.interest_alignment.applicable ? 'Yes' : 'No'}</li>
+            {parsed.interest_alignment.matching_activities && <li><b>Matching Activities:</b> {parsed.interest_alignment.matching_activities.join(', ')}</li>}
+            {parsed.interest_alignment.why_it_matches && <li><b>Why it matches:</b> {parsed.interest_alignment.why_it_matches}</li>}
+            {parsed.interest_alignment.personalized_recommendation && <li><b>Personalized Recommendation:</b> {parsed.interest_alignment.personalized_recommendation}</li>}
+          </ul>
+        </section>
+      )}
+      <section className="mb-4">
+        <h4 className="font-semibold text-gray-800">Personal Connection</h4>
+        <p>{parsed.personal_connection}</p>
+      </section>
+    </div>
+  );
+}
+
+export default function SearchPage() {
+  const [user, setUser] = useState({ name: '', country: '' });
+  const [userInterests, setUserInterests] = useState([]);
+  const [currentLocation, setCurrentLocation] = useState('');
+  const [destination, setDestination] = useState('');
+  const [response, setResponse] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchUserAndInterests = async () => {
+      const token = localStorage.getItem('token');
+      const userId = localStorage.getItem('userId');
+      if (!token || !userId) return;
+      try {
+        // Fetch user info
+        const userRes = await axios.get(`${API_URL}/api/user/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setUser({ name: userRes.data.name, country: userRes.data.country });
+        // Fetch user interests
+        const intRes = await axios.get(`${API_URL}/api/preference/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setUserInterests(intRes.data?.interest || []);
+      } catch (err) {
+        setError('Failed to fetch user info or interests');
+      }
+    };
+    fetchUserAndInterests();
+  }, []);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setError("");
+    setResponse("");
+    setLoading(true);
+    const interestsString = userInterests.join(', ');
+    const fullPrompt = `${SYSTEM_PROMPT}\n\nBased on the above instructions and format, provide detailed tourism information for a user currently in ${currentLocation} who wants to go to ${destination} in Nepal. The user's name is ${user.name}, from ${user.country}, interested in ${interestsString}. Include personalized content that makes the user feel the guide was created specifically for them. Only include interest alignment if the destination genuinely offers relevant experiences. Include accurate, verified information formatted as clean JSON without any conversational elements or emojis.`;
+    const payload = {
+      contents: [{
+        parts: [{ text: fullPrompt }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 2048,
+      }
+    };
+    try {
+      const res = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResponse(JSON.stringify(data, null, 2));
+        setLoading(false);
+        return;
+      }
+      const output = data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+      setResponse(output);
+    } catch (err) {
+      setResponse(
+        JSON.stringify({
+          error: "Failed to fetch response from Gemini. Please check your API key and network connection.",
+          details: typeof err === "object" && err !== null && "message" in err ? err.message : String(err)
+        }, null, 2)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-8 bg-gray-50 min-h-screen">
+      <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
+        Nepal Tourism Content Generator
+      </h2>
+      <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+        <div className="grid gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Current Location:
+            </label>
+            <input
+              type="text"
+              value={currentLocation}
+              onChange={e => setCurrentLocation(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g., Kathmandu, Delhi, London"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Destination in Nepal:
+            </label>
+            <input
+              type="text"
+              value={destination}
+              onChange={e => setDestination(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g., Thamel, Pokhara, Everest Base Camp"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Your Name:
+            </label>
+            <input
+              type="text"
+              value={user.name}
+              disabled
+              className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
+              placeholder="Enter your name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Country of Origin:
+            </label>
+            <input
+              type="text"
+              value={user.country}
+              disabled
+              className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
+              placeholder="e.g., Canada, USA, UK"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Interests:
+            </label>
+            <input
+              type="text"
+              value={userInterests.join(', ')}
+              disabled
+              className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
+              placeholder="e.g., trekking, photography, cultural sites, adventure sports"
+            />
+          </div>
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !destination}
+            className={`w-full py-3 px-6 rounded-md font-semibold text-white transition-colors ${
+              loading 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'
+            }`}
+          >
+            {loading ? "Generating..." : "Generate Personalized Guide"}
+          </button>
+        </div>
+      </div>
+      {response && <GuideDisplay data={response} />}
+      {error && <div className="text-red-600 mt-2">{error}</div>}
+    </div>
+  );
+} 

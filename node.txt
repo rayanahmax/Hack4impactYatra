@@ -1,0 +1,4 @@
+to start:
+    cd to backend-->   node app.js
+            OR
+    cd to backend-->    nodemon app.js
