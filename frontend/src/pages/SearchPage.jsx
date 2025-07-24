@@ -209,11 +209,21 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  const [userIdMissing, setUserIdMissing] = useState(false);
   useEffect(() => {
+
+      setLoggedIn(!!localStorage.getItem('token'));
+
+
     const fetchUserAndInterests = async () => {
       const token = localStorage.getItem('token');
       const userId = localStorage.getItem('userId');
-      if (!token || !userId) return;
+      if (!token || !userId) {
+        setUserIdMissing(true);
+        return;
+      }
       try {
         // Fetch user info
         const userRes = await axios.get(`${API_URL}/api/user/${userId}`, {
@@ -277,84 +287,104 @@ export default function SearchPage() {
   };
 
   return (
+    
     <div className="max-w-4xl mx-auto p-8 bg-gray-50 min-h-screen">
       <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
         Nepal Tourism Content Generator
       </h2>
+      {loggedIn && (
+  <button
+    onClick={() => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userId');
+      setLoggedIn(false);
+      window.location.reload();
+    }}
+    className="bg-red-600 text-white px-4 py-2 rounded shadow ml-4"
+  >
+    Logout
+  </button>
+)}
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        <div className="grid gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Current Location:
-            </label>
-            <input
-              type="text"
-              value={currentLocation}
-              onChange={e => setCurrentLocation(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Kathmandu, Delhi, London"
-            />
+        {userIdMissing ? (
+          <div className="text-red-600 font-semibold text-center">
+            You must be logged in to use the personalized guide. Please <a href="/login" className="underline text-blue-600">login</a> or <a href="/register" className="underline text-blue-600">register</a> first.
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Destination in Nepal:
-            </label>
-            <input
-              type="text"
-              value={destination}
-              onChange={e => setDestination(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Thamel, Pokhara, Everest Base Camp"
-            />
+        ) : (
+          <div className="grid gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Current Location:
+              </label>
+              <input
+                type="text"
+                value={currentLocation}
+                onChange={e => setCurrentLocation(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Kathmandu, Delhi, London"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Destination in Nepal:
+              </label>
+              <input
+                type="text"
+                value={destination}
+                onChange={e => setDestination(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Thamel, Pokhara, Everest Base Camp"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Your Name:
+              </label>
+              <input
+                type="text"
+                value={user.name}
+                disabled
+                className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
+                placeholder="Enter your name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Country of Origin:
+              </label>
+              <input
+                type="text"
+                value={user.country}
+                disabled
+                className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
+                placeholder="e.g., Canada, USA, UK"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Interests:
+              </label>
+              <input
+                type="text"
+                value={userInterests.join(', ')}
+                disabled
+                className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
+                placeholder="e.g., trekking, photography, cultural sites, adventure sports"
+              />
+            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={loading || !destination}
+              className={`w-full py-3 px-6 rounded-md font-semibold text-white transition-colors ${
+                loading 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'
+              }`}
+            >
+              {loading ? "Generating..." : "Generate Personalized Guide"}
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Your Name:
-            </label>
-            <input
-              type="text"
-              value={user.name}
-              disabled
-              className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
-              placeholder="Enter your name"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Country of Origin:
-            </label>
-            <input
-              type="text"
-              value={user.country}
-              disabled
-              className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
-              placeholder="e.g., Canada, USA, UK"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Interests:
-            </label>
-            <input
-              type="text"
-              value={userInterests.join(', ')}
-              disabled
-              className="w-full p-3 border border-gray-300 rounded-md bg-gray-100"
-              placeholder="e.g., trekking, photography, cultural sites, adventure sports"
-            />
-          </div>
-          <button
-            onClick={handleSubmit}
-            disabled={loading || !destination}
-            className={`w-full py-3 px-6 rounded-md font-semibold text-white transition-colors ${
-              loading 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'
-            }`}
-          >
-            {loading ? "Generating..." : "Generate Personalized Guide"}
-          </button>
-        </div>
+        )}
       </div>
       {response && <GuideDisplay data={response} />}
       {error && <div className="text-red-600 mt-2">{error}</div>}
